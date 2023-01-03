@@ -2,6 +2,8 @@ package com.genersoft.iot.vmp.service;
 
 import com.genersoft.iot.vmp.gb28181.bean.Device;
 import com.genersoft.iot.vmp.gb28181.bean.DeviceChannel;
+import com.genersoft.iot.vmp.vmanager.bean.ResourceBaceInfo;
+import com.genersoft.iot.vmp.vmanager.gb28181.platform.bean.ChannelReduce;
 
 import java.util.List;
 
@@ -32,4 +34,16 @@ public interface IDeviceChannelService {
      */
     int updateChannels(String deviceId, List<DeviceChannel> channels);
 
+    /**
+     * 获取统计信息
+     * @return
+     */
+    ResourceBaceInfo getOverview();
+
+    /**
+     * 查询所有未分配的通道
+     * @param platformId
+     * @return
+     */
+    List<ChannelReduce> queryAllChannelList(String platformId);
 }

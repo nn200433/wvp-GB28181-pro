@@ -31,7 +31,19 @@ public class UserSetting {
 
     private Boolean logInDatebase = Boolean.TRUE;
 
-    private Boolean redisConfig = Boolean.TRUE;
+    private Boolean usePushingAsStatus = Boolean.TRUE;
+
+    private Boolean useSourceIpAsStreamIp = Boolean.FALSE;
+
+    private Boolean sipUseSourceIpAsRemoteAddress = Boolean.FALSE;
+
+    private Boolean streamOnDemand = Boolean.TRUE;
+
+    private Boolean pushAuthority = Boolean.TRUE;
+
+    private Boolean gbSendStreamStrict = Boolean.FALSE;
+
+    private Boolean syncChannelOnDeviceOnline = Boolean.FALSE;
 
     private String serverId = "000000";
 
@@ -123,14 +135,6 @@ public class UserSetting {
         this.thirdPartyGBIdReg = thirdPartyGBIdReg;
     }
 
-    public Boolean getRedisConfig() {
-        return redisConfig;
-    }
-
-    public void setRedisConfig(Boolean redisConfig) {
-        this.redisConfig = redisConfig;
-    }
-
     public Boolean getRecordSip() {
         return recordSip;
     }
@@ -145,5 +149,61 @@ public class UserSetting {
 
     public void setPlatformPlayTimeout(int platformPlayTimeout) {
         this.platformPlayTimeout = platformPlayTimeout;
+    }
+
+    public Boolean isUsePushingAsStatus() {
+        return usePushingAsStatus;
+    }
+
+    public void setUsePushingAsStatus(Boolean usePushingAsStatus) {
+        this.usePushingAsStatus = usePushingAsStatus;
+    }
+
+    public Boolean getStreamOnDemand() {
+        return streamOnDemand;
+    }
+
+    public void setStreamOnDemand(Boolean streamOnDemand) {
+        this.streamOnDemand = streamOnDemand;
+    }
+
+    public Boolean getUseSourceIpAsStreamIp() {
+        return useSourceIpAsStreamIp;
+    }
+
+    public void setUseSourceIpAsStreamIp(Boolean useSourceIpAsStreamIp) {
+        this.useSourceIpAsStreamIp = useSourceIpAsStreamIp;
+    }
+
+    public Boolean getPushAuthority() {
+        return pushAuthority;
+    }
+
+    public void setPushAuthority(Boolean pushAuthority) {
+        this.pushAuthority = pushAuthority;
+    }
+
+    public Boolean getGbSendStreamStrict() {
+        return gbSendStreamStrict;
+    }
+
+    public void setGbSendStreamStrict(Boolean gbSendStreamStrict) {
+        this.gbSendStreamStrict = gbSendStreamStrict;
+    }
+
+    public Boolean getSyncChannelOnDeviceOnline() {
+        return syncChannelOnDeviceOnline;
+    }
+
+    public void setSyncChannelOnDeviceOnline(Boolean syncChannelOnDeviceOnline) {
+        this.syncChannelOnDeviceOnline = syncChannelOnDeviceOnline;
+    }
+
+    public Boolean getSipUseSourceIpAsRemoteAddress() {
+        return sipUseSourceIpAsRemoteAddress;
+    }
+
+    public void setSipUseSourceIpAsRemoteAddress(Boolean sipUseSourceIpAsRemoteAddress) {
+        this.sipUseSourceIpAsRemoteAddress = sipUseSourceIpAsRemoteAddress;
     }
 }

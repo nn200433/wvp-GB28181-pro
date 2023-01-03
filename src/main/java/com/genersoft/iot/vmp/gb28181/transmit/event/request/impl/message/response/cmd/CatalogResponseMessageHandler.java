@@ -1,19 +1,13 @@
 package com.genersoft.iot.vmp.gb28181.transmit.event.request.impl.message.response.cmd;
 
-import com.genersoft.iot.vmp.conf.SipConfig;
-import com.genersoft.iot.vmp.conf.UserSetting;
 import com.genersoft.iot.vmp.gb28181.bean.*;
-import com.genersoft.iot.vmp.gb28181.event.EventPublisher;
 import com.genersoft.iot.vmp.gb28181.session.CatalogDataCatch;
-import com.genersoft.iot.vmp.gb28181.transmit.callback.DeferredResultHolder;
 import com.genersoft.iot.vmp.gb28181.transmit.event.request.SIPRequestProcessorParent;
 import com.genersoft.iot.vmp.gb28181.transmit.event.request.impl.message.IMessageHandler;
 import com.genersoft.iot.vmp.gb28181.transmit.event.request.impl.message.response.ResponseMessageHandler;
-import com.genersoft.iot.vmp.gb28181.utils.Coordtransform;
-import com.genersoft.iot.vmp.gb28181.utils.NumericUtil;
 import com.genersoft.iot.vmp.gb28181.utils.XmlUtil;
-import com.genersoft.iot.vmp.storager.IRedisCatchStorage;
 import com.genersoft.iot.vmp.storager.IVideoManagerStorage;
+import gov.nist.javax.sip.message.SIPRequest;
 import org.dom4j.DocumentException;
 import org.dom4j.Element;
 import org.slf4j.Logger;
@@ -23,7 +17,6 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 import org.springframework.stereotype.Component;
-import org.springframework.util.StringUtils;
 
 import javax.sip.InvalidArgumentException;
 import javax.sip.RequestEvent;
@@ -35,40 +28,25 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.concurrent.ConcurrentLinkedQueue;
 
+/**
+ * 目录查询的回复
+ */
 @Component
 public class CatalogResponseMessageHandler extends SIPRequestProcessorParent implements InitializingBean, IMessageHandler {
 
     private Logger logger = LoggerFactory.getLogger(CatalogResponseMessageHandler.class);
     private final String cmdType = "Catalog";
 
-    private boolean taskQueueHandlerRun = false;
-
     @Autowired
     private ResponseMessageHandler responseMessageHandler;
 
-    private ConcurrentLinkedQueue<HandlerCatchData> taskQueue = new ConcurrentLinkedQueue<>();
+    private final ConcurrentLinkedQueue<HandlerCatchData> taskQueue = new ConcurrentLinkedQueue<>();
 
     @Autowired
     private IVideoManagerStorage storager;
 
     @Autowired
-    private DeferredResultHolder deferredResultHolder;
-
-    @Autowired
     private CatalogDataCatch catalogDataCatch;
-
-    @Autowired
-    private SipConfig config;
-
-    @Autowired
-    private EventPublisher publisher;
-
-    //by brewswang
-    @Autowired
-    private UserSetting userSetting;
-
-    @Autowired
-    private IRedisCatchStorage redisCatchStorage;
 
     @Qualifier("taskExecutor")
     @Autowired
@@ -81,33 +59,35 @@ public class CatalogResponseMessageHandler extends SIPRequestProcessorParent imp
 
     @Override
     public void handForDevice(RequestEvent evt, Device device, Element element) {
+        boolean isEmpty = taskQueue.isEmpty();
         taskQueue.offer(new HandlerCatchData(evt, device, element));
         // 回复200 OK
         try {
-            responseAck(evt, Response.OK);
-        } catch (SipException e) {
-            throw new RuntimeException(e);
-        } catch (InvalidArgumentException e) {
-            throw new RuntimeException(e);
-        } catch (ParseException e) {
-            throw new RuntimeException(e);
+            responseAck((SIPRequest) evt.getRequest(), Response.OK);
+        } catch (SipException | InvalidArgumentException | ParseException e) {
+            logger.error("[命令发送失败] 目录查询回复: {}", e.getMessage());
         }
-        if (!taskQueueHandlerRun) {
-            taskQueueHandlerRun = true;
-            taskExecutor.execute(()-> {
+        // 如果不为空则说明已经开启消息处理
+        if (isEmpty) {
+            taskExecutor.execute(() -> {
                 while (!taskQueue.isEmpty()) {
-                    HandlerCatchData take = taskQueue.poll();
-                    String key = DeferredResultHolder.CALLBACK_CMD_CATALOG + take.getDevice().getDeviceId();
-                    Element rootElement = null;
+                    // 全局异常捕获，保证下一条可以得到处理
                     try {
-                        rootElement = getRootElement(take.getEvt(), take.getDevice().getCharset());
+                        HandlerCatchData take = taskQueue.poll();
+                        Element rootElement = null;
+                        try {
+                            rootElement = getRootElement(take.getEvt(), take.getDevice().getCharset());
+                        } catch (DocumentException e) {
+                            logger.error("[xml解析] 失败： ", e);
+                            continue;
+                        }
+                        if (rootElement == null) {
+                            logger.warn("[ 收到通道 ] content cannot be null, {}", evt.getRequest());
+                            continue;
+                        }
                         Element deviceListElement = rootElement.element("DeviceList");
                         Element sumNumElement = rootElement.element("SumNum");
                         Element snElement = rootElement.element("SN");
-                        if (snElement == null || sumNumElement == null || deviceListElement == null) {
-                            responseAck(take.getEvt(), Response.BAD_REQUEST, "xml error");
-                            return;
-                        }
                         int sumNum = Integer.parseInt(sumNumElement.getText());
 
                         if (sumNum == 0) {
@@ -115,7 +95,7 @@ public class CatalogResponseMessageHandler extends SIPRequestProcessorParent imp
                             // 数据已经完整接收
                             storager.cleanChannelsForDevice(take.getDevice().getDeviceId());
                             catalogDataCatch.setChannelSyncEnd(take.getDevice().getDeviceId(), null);
-                        }else {
+                        } else {
                             Iterator<Element> deviceListIterator = deviceListElement.elementIterator();
                             if (deviceListIterator != null) {
                                 List<DeviceChannel> channelList = new ArrayList<>();
@@ -133,34 +113,28 @@ public class CatalogResponseMessageHandler extends SIPRequestProcessorParent imp
                                 }
                                 int sn = Integer.parseInt(snElement.getText());
                                 catalogDataCatch.put(take.getDevice().getDeviceId(), sn, sumNum, take.getDevice(), channelList);
-                                logger.info("[收到通道]设备: {} -> {}个，{}/{}", take.getDevice().getDeviceId(), channelList.size(), catalogDataCatch.get(take.getDevice().getDeviceId()) == null ? 0 :catalogDataCatch.get(take.getDevice().getDeviceId()).size(), sumNum);
+                                logger.info("[收到通道]设备: {} -> {}个，{}/{}", take.getDevice().getDeviceId(), channelList.size(), catalogDataCatch.get(take.getDevice().getDeviceId()) == null ? 0 : catalogDataCatch.get(take.getDevice().getDeviceId()).size(), sumNum);
                                 if (catalogDataCatch.get(take.getDevice().getDeviceId()).size() == sumNum) {
-                                    // 数据已经完整接收
+                                    // 数据已经完整接收， 此时可能存在某个设备离线变上线的情况，但是考虑到性能，此处不做处理，
+                                    // 目前支持设备通道上线通知时和设备上线时向上级通知
                                     boolean resetChannelsResult = storager.resetChannels(take.getDevice().getDeviceId(), catalogDataCatch.get(take.getDevice().getDeviceId()));
                                     if (!resetChannelsResult) {
                                         String errorMsg = "接收成功，写入失败，共" + sumNum + "条，已接收" + catalogDataCatch.get(take.getDevice().getDeviceId()).size() + "条";
                                         catalogDataCatch.setChannelSyncEnd(take.getDevice().getDeviceId(), errorMsg);
-                                    }else {
+                                    } else {
                                         catalogDataCatch.setChannelSyncEnd(take.getDevice().getDeviceId(), null);
                                     }
                                 }
                             }
 
                         }
-                    } catch (DocumentException e) {
-                        e.printStackTrace();
-                    } catch (InvalidArgumentException e) {
-                        e.printStackTrace();
-                    } catch (ParseException e) {
-                        e.printStackTrace();
-                    } catch (SipException e) {
-                        e.printStackTrace();
+                    }catch (Exception e) {
+                        logger.warn("[收到通道] 发现未处理的异常, {}\r\n{}",e.getMessage(), evt.getRequest());
                     }
                 }
-                taskQueueHandlerRun = false;
             });
-
         }
+
     }
 
     @Override
@@ -171,7 +145,7 @@ public class CatalogResponseMessageHandler extends SIPRequestProcessorParent imp
     public SyncStatus getChannelSyncProgress(String deviceId) {
         if (catalogDataCatch.get(deviceId) == null) {
             return null;
-        }else {
+        } else {
             return catalogDataCatch.getSyncStatus(deviceId);
         }
     }
@@ -179,7 +153,7 @@ public class CatalogResponseMessageHandler extends SIPRequestProcessorParent imp
     public boolean isSyncRunning(String deviceId) {
         if (catalogDataCatch.get(deviceId) == null) {
             return false;
-        }else {
+        } else {
             return catalogDataCatch.isSyncRunning(deviceId);
         }
     }

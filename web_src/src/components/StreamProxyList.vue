@@ -32,7 +32,7 @@
       <el-table-column label="类型" width="100" >
         <template slot-scope="scope">
           <div slot="reference" class="name-wrapper">
-            <el-tag size="medium">{{scope.row.type}}</el-tag>
+            <el-tag size="medium">{{scope.row.type === "default"? "直接代理":"FFMPEG代理"}}</el-tag>
           </div>
         </template>
       </el-table-column>
@@ -55,15 +55,15 @@
         </template>
       </el-table-column>
       <el-table-column prop="createTime" label="创建时间"  min-width="150" show-overflow-tooltip/>
-      <el-table-column label="转HLS" min-width="120" >
+      <el-table-column label="音频" min-width="120" >
         <template slot-scope="scope">
           <div slot="reference" class="name-wrapper">
-            <el-tag size="medium" v-if="scope.row.enable_hls">已启用</el-tag>
-            <el-tag size="medium" type="info" v-if="!scope.row.enable_hls">未启用</el-tag>
+            <el-tag size="medium" v-if="scope.row.enable_audio">已启用</el-tag>
+            <el-tag size="medium" type="info" v-if="!scope.row.enable_audio">未启用</el-tag>
           </div>
         </template>
       </el-table-column>
-      <el-table-column label="MP4录制" min-width="120" >
+      <el-table-column label="录制" min-width="120" >
         <template slot-scope="scope">
           <div slot="reference" class="name-wrapper">
             <el-tag size="medium" v-if="scope.row.enable_mp4">已启用</el-tag>
@@ -71,11 +71,12 @@
           </div>
         </template>
       </el-table-column>
-      <el-table-column label="无人观看自动删除" min-width="160" >
+      <el-table-column label="无人观看" min-width="160" >
         <template slot-scope="scope">
           <div slot="reference" class="name-wrapper">
-            <el-tag size="medium" v-if="scope.row.enable_remove_none_reader">已启用</el-tag>
-            <el-tag size="medium" type="info" v-if="!scope.row.enable_remove_none_reader">未启用</el-tag>
+            <el-tag size="medium" v-if="scope.row.enable_remove_none_reader">移除</el-tag>
+            <el-tag size="medium" v-if="scope.row.enable_disable_none_reader">停用</el-tag>
+            <el-tag size="medium" type="info" v-if="!scope.row.enable_remove_none_reader && !scope.row.enable_disable_none_reader">不做处理</el-tag>
           </div>
         </template>
       </el-table-column>
@@ -131,7 +132,6 @@
 				currentPage:1,
 				count:15,
 				total:0,
-				getListLoading: false,
         startBtnLoading: false
 			};
 		},
@@ -139,7 +139,7 @@
 		},
 		mounted() {
 			this.initData();
-			this.updateLooper = setInterval(this.initData, 1000);
+			this.startUpdateList()
 		},
 		destroyed() {
 			this.$destroy('videojs');
@@ -149,6 +149,12 @@
 			initData: function() {
 				this.getStreamProxyList();
 			},
+      stopUpdateList: function (){
+        window.clearInterval(this.updateLooper)
+      },
+      startUpdateList: function (){
+        this.updateLooper = setInterval(this.initData, 1000);
+      },
 			currentChange: function(val){
 				this.currentPage = val;
 				this.getStreamProxyList();
@@ -159,7 +165,6 @@
 			},
 			getStreamProxyList: function() {
 				let that = this;
-				this.getListLoading = true;
 				this.$axios({
 					method: 'get',
 					url:`/api/proxy/list`,
@@ -168,29 +173,26 @@
 						count: that.count
 					}
 				}).then(function (res) {
-					that.total = res.data.total;
-          for (let i = 0; i < res.data.list.length; i++) {
-            res.data.list[i]["startBtnLoading"] = false;
+          if (res.data.code === 0) {
+            that.total = res.data.data.total;
+            for (let i = 0; i < res.data.data.list.length; i++) {
+              res.data.data.list[i]["startBtnLoading"] = false;
+            }
+            that.streamProxyList = res.data.data.list;
           }
-          that.streamProxyList = res.data.list;
-					that.getListLoading = false;
 				}).catch(function (error) {
 					console.log(error);
-					that.getListLoading = false;
 				});
 			},
 			addStreamProxy: function(){
 				this.$refs.streamProxyEdit.openDialog(null, this.initData)
 			},
       addOnvif: function(){
-        this.getListLoading = true;
-        this.getListLoading = true;
         this.$axios({
           method: 'get',
           url:`/api/onvif/search?timeout=3000`,
         }).then((res) =>{
-          this.getListLoading = false;
-          if (res.data.code == 0 ){
+          if (res.data.code === 0 ){
             if (res.data.data.length > 0) {
               this.$refs.onvifEdit.openDialog(res.data.data, (url)=>{
                   if (url != null) {
@@ -206,7 +208,6 @@
           }
 
         }).catch((error)=> {
-          this.getListLoading = false;
           this.$message.error(error.response.data.msg);
         });
 
@@ -215,17 +216,15 @@
 			},
 			play: function(row){
 				let that = this;
-				this.getListLoading = true;
 				this.$axios({
 					method: 'get',
-					url:`/api/media/stream_info_by_app_and_stream`,
+					url:`/api/push/getPlayUrl`,
 					params: {
 						app: row.app,
 						stream: row.stream,
             mediaServerId: row.mediaServerId
 					}
 				}).then(function (res) {
-					that.getListLoading = false;
 					if (res.data.code === 0) {
             that.$refs.devicePlayer.openDialog("streamPlay", null, null, {
               streamInfo: res.data.data,
@@ -241,13 +240,11 @@
 
 				}).catch(function (error) {
 					console.log(error);
-					that.getListLoading = false;
 				});
 
 			},
 			deleteStreamProxy: function(row){
 				let that = this;
-				this.getListLoading = true;
 				that.$axios({
                     method:"delete",
                     url:"/api/proxy/del",
@@ -256,16 +253,13 @@
                       stream: row.stream
                     }
                 }).then((res)=>{
-                    that.getListLoading = false;
 					          that.initData()
                 }).catch(function (error) {
                     console.log(error);
-					          that.getListLoading = false;
                 });
 			},
 			start: function(row){
-				let that = this;
-				this.getListLoading = true;
+        this.stopUpdateList()
         this.$set(row, 'startBtnLoading', true)
 				this.$axios({
 					method: 'get',
@@ -274,28 +268,31 @@
 						app: row.app,
 						stream: row.stream
 					}
-				}).then(function (res) {
-          that.getListLoading = false;
-          that.$set(row, 'startBtnLoading', false)
-				  if (res.data == "success"){
-            that.initData()
+				}).then((res)=> {
+				  if (res.data.code === 0){
+            this.initData()
           }else {
-            that.$message({
+            this.$message({
               showClose: true,
-              message: "保存失败，请检查地址是否可用！",
+              message: "启动失败，请检查地址是否可用！",
               type: "error",
             });
           }
-
-				}).catch(function (error) {
+          this.$set(row, 'startBtnLoading', false)
+          this.startUpdateList()
+				}).catch((error)=> {
 					console.log(error);
-					that.getListLoading = false;
-          that.$set(row, 'startBtnLoading', false)
+          this.$message({
+            showClose: true,
+            message: "启动失败，请检查地址是否可用！",
+            type: "error",
+          });
+          this.$set(row, 'startBtnLoading', false)
+          this.startUpdateList()
 				});
 			},
 			stop: function(row){
 				let that = this;
-				this.getListLoading = true;
 				this.$axios({
 					method: 'get',
 					url:`/api/proxy/stop`,
@@ -304,11 +301,9 @@
 						stream: row.stream
 					}
 				}).then(function (res) {
-					that.getListLoading = false;
 					that.initData()
 				}).catch(function (error) {
 					console.log(error);
-					that.getListLoading = false;
 				});
 			},
       refresh: function (){

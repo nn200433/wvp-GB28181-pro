@@ -16,6 +16,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
+import org.springframework.util.ObjectUtils;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -73,7 +74,9 @@ public class PlatformChannelServiceImpl implements IPlatformChannelService {
             result = platformChannelMapper.addChannels(platformId, channelReducesToAdd);
             // TODO 后续给平台增加控制开关以控制是否响应目录订阅
             List<DeviceChannel> deviceChannelList = getDeviceChannelListByChannelReduceList(channelReducesToAdd, catalogId, platform);
-            eventPublisher.catalogEventPublish(platformId, deviceChannelList, CatalogEvent.ADD);
+            if (deviceChannelList != null) {
+                eventPublisher.catalogEventPublish(platformId, deviceChannelList, CatalogEvent.ADD);
+            }
         }
 
         return result;
@@ -83,7 +86,7 @@ public class PlatformChannelServiceImpl implements IPlatformChannelService {
         List<DeviceChannel> deviceChannelList = new ArrayList<>();
         if (channelReduces.size() > 0){
             PlatformCatalog catalog = catalogManager.select(catalogId);
-            if (catalog == null && !catalogId.equals(platform.getServerGBId())) {
+            if (catalog == null && !catalogId.equals(platform.getDeviceGBId())) {
                 logger.warn("未查询到目录{}的信息", catalogId);
                 return null;
             }
@@ -102,5 +105,27 @@ public class PlatformChannelServiceImpl implements IPlatformChannelService {
             }
         }
         return deviceChannelList;
+    }
+
+    @Override
+    public int delAllChannelForGB(String platformId, String catalogId) {
+
+        int result;
+        if (platformId == null) {
+            return 0;
+        }
+        ParentPlatform platform = platformMapper.getParentPlatByServerGBId(platformId);
+        if (platform == null) {
+            return 0;
+        }
+        if (ObjectUtils.isEmpty(catalogId)) {
+           catalogId = platform.getDeviceGBId();
+        }
+
+        if ((result = platformChannelMapper.delChannelForGBByCatalogId(platformId, catalogId)) > 0) {
+            List<DeviceChannel> deviceChannels = platformChannelMapper.queryAllChannelInCatalog(platformId, catalogId);
+            eventPublisher.catalogEventPublish(platformId, deviceChannels, CatalogEvent.DEL);
+        }
+        return result;
     }
 }

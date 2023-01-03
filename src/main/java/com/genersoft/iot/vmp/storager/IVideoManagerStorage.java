@@ -100,36 +100,6 @@ public interface IVideoManagerStorage {
 	 */
 	public List<Device> queryVideoDeviceList();
 
-	/**   
-	 * 删除设备
-	 * 
-	 * @param deviceId 设备ID
-	 * @return true：删除成功  false：删除失败
-	 */
-	public boolean delete(String deviceId);
-	
-	/**   
-	 * 更新设备在线
-	 * 
-	 * @param deviceId 设备ID
-	 * @return true：更新成功  false：更新失败
-	 */
-	public boolean online(String deviceId);
-	
-	/**   
-	 * 更新设备离线
-	 * 
-	 * @param deviceId 设备ID
-	 * @return true：更新成功  false：更新失败
-	 */
-	public boolean outline(String deviceId);
-
-	/**
-	 * 更新所有设备离线
-	 *
-	 * @return true：更新成功  false：更新失败
-	 */
-	public boolean outlineForAll();
 
 
 	/**
@@ -169,15 +139,6 @@ public interface IVideoManagerStorage {
 	 * @param parentPlatform
 	 */
 	boolean deleteParentPlatform(ParentPlatform parentPlatform);
-
-
-	/**
-	 * 分页获取上级平台
-	 * @param page
-	 * @param count
-	 * @return
-	 */
-	PageInfo<ParentPlatform> queryParentPlatformList(int page, int count);
 
 	/**
 	 * 获取所有已启用的平台
